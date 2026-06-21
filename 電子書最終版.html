@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>線上遊戲用語電子辭典</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap');
+        
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            background-color: #050505;
+            color: #f8fafc;
+            background-image: 
+                linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+            background-size: 40px 40px;
+            overflow: hidden; 
+            margin: 0;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+        }
+
+        /* 霓虹光暈 */
+        .glow-bg-1 {
+            position: fixed; top: -20%; left: -10%; width: 50%; height: 50%;
+            background: rgba(217, 70, 239, 0.15); border-radius: 50%; filter: blur(150px); pointer-events: none;
+        }
+        .glow-bg-2 {
+            position: fixed; bottom: -20%; right: -10%; width: 50%; height: 50%;
+            background: rgba(6, 182, 212, 0.15); border-radius: 50%; filter: blur(150px); pointer-events: none;
+        }
+
+        /* 3D 書本容器 */
+        #book-wrapper {
+            perspective: 2500px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.3s ease-out;
+            position: relative;
+        }
+
+        .book {
+            position: relative;
+            width: 860px;
+            height: 640px;
+            transform-style: preserve-3d;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.9);
+        }
+
+        .leaf {
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 50%;
+            height: 100%;
+            transform-style: preserve-3d;
+            transform-origin: left center;
+            transition: transform 0.8s cubic-bezier(0.645, 0.045, 0.355, 1);
+            cursor: pointer;
+        }
+
+        .leaf.flipped {
+            transform: rotateY(-180deg);
+        }
+
+        .page-front, .page-back {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            backface-visibility: hidden;
+            background: #0d0d12;
+            border: 1px solid #1e293b;
+            box-sizing: border-box;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .page-front {
+            transform: rotateY(0deg);
+            background: linear-gradient(to right, #050508 0%, #0d0d12 8%, #0d0d12 100%);
+            border-left: 1px solid #000;
+            border-radius: 0 12px 12px 0;
+        }
+
+        .page-back {
+            transform: rotateY(180deg);
+            background: linear-gradient(to left, #050508 0%, #0d0d12 8%, #0d0d12 100%);
+            border-right: 1px solid #000;
+            border-radius: 12px 0 0 12px;
+        }
+
+        .page-content {
+            padding: 2.5rem 3rem;
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        .page-number {
+            position: absolute;
+            bottom: 1.5rem;
+            font-family: monospace;
+            color: #475569;
+            font-size: 0.875rem;
+            font-weight: bold;
+        }
+        .page-front .page-number { right: 2.5rem; }
+        .page-back .page-number { left: 2.5rem; }
+
+        .cover-page {
+            background: #050505 !important;
+            border: 2px solid #d946ef33 !important;
+            box-shadow: inset 0 0 80px rgba(217, 70, 239, 0.15) !important;
+        }
+
+        /* 注音側邊檢索列 */
+        #thumb-index {
+            position: fixed;
+            right: 1rem;
+            top: 50%;
+            transform: translateY(-50%);
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            z-index: 50;
+            background: rgba(10, 10, 15, 0.8);
+            backdrop-filter: blur(8px);
+            padding: 0.5rem;
+            border-radius: 1rem;
+            border: 1px solid rgba(30, 41, 59, 0.8);
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            max-height: 85vh;
+            overflow-y: auto;
+        }
+        #thumb-index::-webkit-scrollbar { width: 4px; }
+        #thumb-index::-webkit-scrollbar-thumb { background: #d946ef; border-radius: 4px; }
+
+        .thumb-btn {
+            width: 24px;
+            height: 24px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: bold;
+            color: #94a3b8;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 1px solid transparent;
+            flex-shrink: 0;
+        }
+        .thumb-btn:not(.disabled):hover, .thumb-btn.active {
+            background: #d946ef;
+            color: white;
+            border-color: #f0abfc;
+            box-shadow: 0 0 10px rgba(217, 70, 239, 0.6);
+            transform: translateX(-4px);
+        }
+        .thumb-btn.disabled {
+            opacity: 0.2;
+            cursor: not-allowed;
+        }
+
+        /* 隱藏原生捲軸但保留滾動功能 */
+        .hide-scroll::-webkit-scrollbar { width: 4px; }
+        .hide-scroll::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+
+        .controls {
+            position: fixed;
+            bottom: 2rem;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 1rem;
+            z-index: 100;
+        }
+
+        @media (max-width: 768px) {
+            #book-wrapper { transform: scale(0.65); width: 140vw; }
+            #thumb-index { transform: scale(0.8) translateY(-60%); right: 0; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="glow-bg-1"></div>
+    <div class="glow-bg-2"></div>
+
+    <div id="thumb-index" class="custom-scrollbar"></div>
+
+    <div id="book-wrapper">
+        <div class="book" id="book">
+            <!-- 書頁將由 JavaScript 動態生成 -->
+        </div>
+    </div>
+
+    <!-- 底部控制項 -->
+    <div class="controls backdrop-blur-md bg-black/40 px-6 py-3 rounded-full border border-slate-800 shadow-[0_0_20px_rgba(0,0,0,0.5)]">
+        <button onclick="prevPage()" class="text-slate-400 hover:text-cyan-400 transition-colors flex items-center gap-2 font-bold text-sm">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+            上一頁
+        </button>
+        <span class="text-slate-600 font-mono text-sm px-4 flex items-center border-x border-slate-700">
+            ← / → 或點擊書頁
+        </span>
+        <button onclick="nextPage()" class="text-slate-400 hover:text-fuchsia-400 transition-colors flex items-center gap-2 font-bold text-sm">
+            下一頁
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+        </button>
+    </div>
+
+    <script>
+        const dictionaryData = [
+            // 第一類：遊戲專業術語
+            { id: 2, category: 1, term: "兵線", bopomofo: "ㄅㄧㄥ ㄒㄧㄢˋ", pinyin: "bīng xiàn", english: "Minion Wave", etymology: "「兵」指小兵，「線」指行進路線。MOBA遊戲獨創概念，最早見於《DotA》社群討論。", definition: "由基地水晶定時生成、沿上路、中路、下路向前移動並互相廝殺的小兵序列；亦指雙方小兵交戰的地理位置。", example: "「先把中路兵線清了再打團，不然小兵會把我們的塔推掉。」" },
+            { id: 3, category: 1, term: "增益", bopomofo: "ㄗㄥ ㄧˋ", pinyin: "zēng yì", english: "Buff", etymology: "源於20世紀70年代桌上角色扮演遊戲（TRPG），原指「魔法強化」，後用於MMORPG，再進入MOBA。", definition: "遊戲賦予角色的臨時正面狀態，如提升攻擊力、生命回復等。亦指在版本更新中對弱勢英雄或裝備進行數值加強。", example: "「這版本下路AD被增益了，可以拿出來打核心。」" },
+            { id: 4, category: 1, term: "冷卻", bopomofo: "ㄌㄥˇ ㄑㄩㄝˋ", pinyin: "lěng què", english: "Cooldown", etymology: "英文「Cool down」字面義「降溫」，引申為技能使用後的等待恢復期。", definition: "技能或主動裝備使用後需等待一段時間才能再次觸發，該等待時間稱「冷卻時間」。「冷卻縮減」（技能急速）是按比例縮短該時間的屬性。", example: "「我大招還有10秒冷卻，先拉扯一下別硬接！」" },
+            { id: 5, category: 1, term: "沉默", bopomofo: "ㄔㄣˊ ㄇㄛˋ", pinyin: "chén mò", english: "Silence", etymology: "借自漢語「沉默」本義「不說話」，在遊戲中喻指「技能被禁言」。最早見於《魔獸爭霸Ⅲ》禁言機制。", definition: "軟控場的一種。受影響的英雄可以移動和普通攻擊，但無法施放任何技能。", example: "「我被沉默了！按不出技能！」" },
+            { id: 6, category: 1, term: "打野", bopomofo: "ㄉㄚˇ ㄧㄝˇ", pinyin: "dǎ yě", english: "Jungler", etymology: "意譯詞。由「打」（攻擊）與「野」（野區）複合。在《英雄聯盟》S1–S2賽季期間，歐洲「EU流」分路體系確立了打野的固定地位。", definition: "不以三條兵線為主要發育場所，而是通過擊殺野區中立野怪獲取資源，並承擔野區視野控制、全圖遊走突襲（Gank）和控龍職責的位置。", example: "「對面打野住在下路了，我們根本不敢推線。」" },
+            { id: 10, category: 1, term: "輔助", bopomofo: "ㄈㄨˇ ㄓㄨˋ", pinyin: "fǔ zhù", english: "Support", etymology: "角色定位稱謂詞，從「協助」本義引申。在《英雄聯盟》早期輔助僅為「插眼工具人」，後演變為「團隊大腦」。", definition: "與物理輸出核心（ADC）同走下路，主動放棄小兵經濟，承擔視野佈控、核心保護、先手開團等支援職責的位置。", example: "「輔助把巴龍池視野做一下，準備打團了。」" },
+            { id: 12, category: 1, term: "控制", bopomofo: "ㄎㄨㄥˋ ㄓˋ", pinyin: "kòng zhì", english: "Crowd Control", etymology: "英文直譯「人群控制」，源於MMORPG遊戲。", definition: "能夠剝奪、限制或改變敵方英雄行動自由與施法狀態的各類技能效果。按限制強度分為「硬控」（如暈眩、擊飛）與「軟控」（如減速、沉默）。", example: "「注意接控制！別讓他把技能用出來！」" },
+            { id: 14, category: 1, term: "龍", bopomofo: "ㄌㄨㄥˊ", pinyin: "lóng", english: "Dragon", etymology: "西方奇幻文化中的龍形象。巴龍「納什男爵」英文名Baron Nashor是對經典遊戲怪物「Roshan」的字母倒序致敬。", definition: "分佈於河道巢穴的超大型史詩野怪：下半區元素龍（小龍，擊殺累積龍魂獲得永久屬性加成），上半區納什男爵（巴龍，擊殺後強化小兵與回城）。", example: "「這波聽我指揮，拿了龍就贏下遊戲了！」" },
+            { id: 18, category: 1, term: "坦克", bopomofo: "ㄊㄢˇ ㄎㄜˋ", pinyin: "tǎn kè", english: "Tank", etymology: "軍事外來語借用。英文「Tank」原指裝甲戰車。口語中因其「血厚耐打」也被稱為「肉盾」。", definition: "天生或通過裝備具備極高防禦力，承擔前排肉盾、吸收傷害、打亂陣型並提供控制保護的英雄類型。", example: "「對面的傷害太高了，隊伍裡需要有人選坦克來扛傷！」" },
+            { id: 19, category: 1, term: "團控", bopomofo: "ㄊㄨㄢˊ ㄎㄨㄥˋ", pinyin: "tuán kòng", english: "AoE Crowd Control", etymology: "「團隊控制」的縮寫。", definition: "作用範圍廣、能同時對多個敵方目標施加控制的強力技能，通常是開啟5v5團戰的核心引擎。", example: "「站位分散一點！對面全是團控，別被一鍋端了！」" },
+            { id: 21, category: 1, term: "英雄", bopomofo: "ㄧㄥ ㄒㄩㄥˊ", pinyin: "yīng xióng", english: "Champion", etymology: "源自《魔獸爭霸Ⅲ》的「英雄單位」概念。需注意：《英雄聯盟》官方英文術語為「Champion」，中文區譯為「英雄」。", definition: "《英雄聯盟》中由玩家直接控制的虛擬角色，每個英雄擁有獨立的技能組、屬性成長線、造型及背景故事。", example: "「這個英雄傷害太過分了，建議下個版本直接砍掉。」" },
+            { id: 22, category: 1, term: "野怪", bopomofo: "ㄧㄝˇ ㄍㄨㄞˋ", pinyin: "yě guài", english: "Neutral Creeps", etymology: "「野外怪物」的簡稱，借自傳統RPG遊戲。", definition: "散佈於野區各營地的中立生物，擊殺它們是打野位置的主要發育來源。", example: "「打野別來線上了，回你家野區刷你的野怪去吧。」" },
+            { id: 23, category: 1, term: "野區", bopomofo: "ㄧㄝˇ ㄑㄩ", pinyin: "yě qū", english: "Jungle", etymology: "意譯詞。英文「Jungle」意為「叢林」，因早期MOBA地圖將非兵線區域設計為樹木藤蔓叢生的地貌而得名。", definition: "召喚師峽谷中，除三條兵線及雙方基地外，所有由牆體、草叢、河道迷霧和野怪營地組成的區域。", example: "「我家野區全是別人，這場遊戲沒法玩了。」" },
+            { id: 24, category: 1, term: "隱身", bopomofo: "ㄧㄣˇ ㄕㄣ", pinyin: "yǐn shēn", english: "Stealth", etymology: "傳統神話修辭借用，原指身形隱藏的法術。在《英雄聯盟》設計中分為靠近會被發現的「偽裝」與絕對隱身的「隱形」。", definition: "英雄通過自身技能進入無法被敵方普通視覺直接觀察的狀態，用於繞後突襲、偵察或規避傷害。", example: "「帶掃描和紅眼！對面有會隱身的刺客！」" },
+            { id: 26, category: 1, term: "射手", bopomofo: "ㄕㄜˋ ㄕㄡˇ", pinyin: "shè shǒu", english: "ADC / Marksman", etymology: "英文「Attack Damage Carry」縮寫ADC，意為「物理傷害核心」。官方分類後改為「Marksman」（射手），但社群仍混用。", definition: "主要承擔持續性遠程物理普通攻擊傷害，是團隊中後期摧毀防禦塔、擊殺坦克的核心輸出位置。", example: "「四保一戰術的核心，就是不惜一切代價讓射手活下來輸出。」" },
+            
+            // 機制類專業術語
+            { id: 101, category: 1, term: "輸入緩衝", bopomofo: "ㄕㄨ ㄖㄨˋ ㄏㄨㄢˇ ㄔㄨㄥ", pinyin: "shū rù huǎn chōng", english: "Input Buffer", etymology: "「輸入」是按鍵，「緩衝」是暫存記憶。系統會在你無法行動時記住你的按鍵，等你能動時自動執行。", definition: "你在不能動的時候按了鍵，遊戲會幫你記住，等你能動的時候自動放出來。", example: "「你在倒地時一直按起身踢，利用輸入緩衝，一起來就會踢出去。」" },
+            { id: 103, category: 1, term: "優先權", bopomofo: "ㄧㄡ ㄒㄧㄢ ㄑㄩㄢˊ", pinyin: "yōu xiān quán", english: "Priority", etymology: "「優先權」就是誰先誰後的規則。當兩個人同時出招，系統會依照內建規則決定誰打中誰。", definition: "當兩人同時出招，系統會決定誰的效果先發生。通常抓技優先於攻擊。", example: "「他出重拳，你出抓，因為抓的優先權高，你會先抓到他。」" },
+            { id: 104, category: 1, term: "前搖", bopomofo: "ㄑㄧㄢˊ ㄧㄠˊ", pinyin: "qián yáo", english: "Startup", etymology: "「搖」指動作開始前的擺動。遊戲中，每個攻擊都有預備動作，這段時間就叫前搖。", definition: "攻擊打中敵人之前的準備動作。前搖越長，越容易被對手打斷。", example: "「這招前搖太長，你剛舉手就會被對方輕拳點掉。」" },
+            { id: 105, category: 1, term: "判定框", bopomofo: "ㄆㄢˋ ㄉㄧㄥˋ ㄎㄨㄤ", pinyin: "pàn dìng kuāng", english: "Hitbox", etymology: "「判定」就是系統決定有沒有打中，「框」就是範圍。遊戲中每個角色和攻擊都隱藏著一個看不見的框，用來計算碰撞。", definition: "遊戲用來判斷「打中」還是「沒打中」的隱形範圍。", example: "「這招看起來沒碰到，但因為判定框很大，還是打中了。」" },
+            { id: 106, category: 1, term: "後搖", bopomofo: "ㄏㄡˋ ㄧㄠˊ", pinyin: "hòu yáo", english: "Recovery", etymology: "「後搖」是相對「前搖」而來，指攻擊打完後的收招時間。", definition: "打完一招之後，角色有一段時間不能做其他動作。後搖越長越危險。", example: "「他重腳踢空後有很長後搖，快趁機打他。」" },
+            { id: 107, category: 1, term: "冷卻時間", bopomofo: "ㄌㄥˇ ㄑㄩㄝˋ ㄕˊ ㄐㄧㄢ", pinyin: "lěng què shí jiān", english: "Cooldown (CD)", etymology: "「冷卻」就是讓技能「降溫」休息。某些強力招式用過後需要等一段時間才能再用。", definition: "某些強力技能用過之後要等一段時間才能再用。", example: "「你的超必殺剛放完，冷卻時間還沒到，不能再用。」" },
+            { id: 108, category: 1, term: "幀數", bopomofo: "ㄓㄣˋ ㄕㄨˋ", pinyin: "zhèn shù", english: "Frame", etymology: "「幀」就是遊戲畫面的一瞬間（通常1秒有60幀）。動作遊戲玩家用「幀數」來測量動作的快慢。", definition: "用來衡量動作時間的單位。1秒有60幀，動作越快幀數越少。", example: "「這招發生只需要3幀，非常快，幾乎躲不掉。」" },
+            { id: 109, category: 1, term: "無敵幀", bopomofo: "ㄨˊ ㄉㄧˊ ㄓㄣˋ", pinyin: "wú dí zhèn", english: "Invincibility Frame", etymology: "「無敵」就是不會受傷，「幀」就是瞬間。某些動作中的某幾幀時間，角色完全不會被攻擊打到。", definition: "在你翻滾、起身或放超必殺時，有極短的時間你完全不會受到傷害。", example: "「他起身的時候有無敵幀，不要在他剛起來的時候出招，會揮空。」" },
+            { id: 110, category: 1, term: "霸體", bopomofo: "ㄅㄚˋ ㄊㄧˇ", pinyin: "bà tǐ", english: "Super Armor", etymology: "「霸」就是強勢不受影響，「體」就是身體。霸體狀態下，敵人打你你不會停止動作，就像穿了鎧甲。", definition: "你出招的時候，敵人的普通攻擊打你，你不會被打斷，但還是會受傷。", example: "「他現在有霸體，你輕拳打他他不會停，跟他換血你虧。」" },
+            { id: 111, category: 1, term: "浮空", bopomofo: "ㄈㄨˊ ㄎㄨㄥ", pinyin: "fú kōng", english: "Launch / Airborne", etymology: "「浮」是飄起來，「空」是空中。被擊飛到空中後，敵人可以在你落地前繼續追打。", definition: "被擊飛到空中，在空中時無法操作，落地前可以被繼續連段。", example: "「升龍拳把他打浮空，然後跳起來接一套空中連段。」" },
+            { id: 112, category: 1, term: "硬直", bopomofo: "ㄧㄥˋ ㄓˊ", pinyin: "yìng zhí", english: "Recovery / Stun", etymology: "「硬直」代表身體僵硬無法動作。被打中或收招時，角色會短暫無法動作。", definition: "角色被打中或被防住後，短時間內無法動作。", example: "「你重拳被防住了，會有硬直，對手趁機反擊你了。」" },
+            { id: 116, category: 1, term: "投技", bopomofo: "ㄊㄡˊ ㄐㄧˋ", pinyin: "tóu jì", english: "Throw", etymology: "「投」就是抓起來摔。投技無法防禦，只能靠提前跳開或同時按鍵拆解。", definition: "一種無法防禦的抓取攻擊，敵人只能靠預判來躲。", example: "「你一直防禦沒用，他會用投技抓你，你要跳起來或拆投。」" },
+            { id: 123, category: 1, term: "升龍", bopomofo: "ㄕㄥ ㄌㄨㄥˊ", pinyin: "shēng lóng", english: "Dragon Punch (DP)", etymology: "「升龍」來自《快打旋風》的「昇龍拳」，因為往上衝、像龍升天。後來所有類似的對空技都被統稱升龍。", definition: "一種向上打的對空技能，可以打掉跳過來的敵人，但沒打中時破綻很大。", example: "「他跳過來，你用升龍把他打下來，但千萬別亂放，沒打到會被反擊。」" },
+            { id: 126, category: 1, term: "連段", bopomofo: "ㄌㄧㄢˊ ㄉㄨㄢˋ", pinyin: "lián duàn", english: "Combo", etymology: "「連段」是日文「連續技」的簡稱。最早在《快打旋風II》中被玩家發現普通攻擊接必殺技可以讓對手一直被打。", definition: "一套讓對手無法防禦的連續攻擊，打完的總傷害比單招高很多。", example: "「輕拳接輕拳再接必殺技，這套連段可以打掉三分之一血。」" },
+            { id: 128, category: 1, term: "續關", bopomofo: "ㄒㄩˋ ㄍㄨㄢ", pinyin: "xù guān", english: "Continue", etymology: "「續關」是投錢接關，來自街機年代：輸了投幣可以繼續玩。", definition: "輸了一場後，可以再打一次，通常要投幣或用遊戲內的復活機會。", example: "「你還有一次復活機會，輸了可以續關，但要從頭打。」" },
+            { id: 132, category: 1, term: "仇恨", bopomofo: "ㄔㄡˊ ㄏㄣˋ", pinyin: "chóu hèn", english: "Threat / Aggro", etymology: "「仇恨」原指怨恨。在遊戲中，怪物會優先攻擊讓牠最生氣的人。誰打牠、補血、靠近牠，都會增加仇恨值。", definition: "怪物對每個玩家的憤怒值。仇恨最高的人會被怪物追打。", example: "「你補血補太猛，仇恨跑到你身上了，快跑到坦克旁邊讓他把仇恨拉回去。」" },
+            { id: 134, category: 1, term: "補師", bopomofo: "ㄅㄨˇ ㄕ", pinyin: "bǔ shī", english: "Healer", etymology: "「補」是補血，「師」是職業。《魔獸世界》正式把補師定為團隊鐵三角之一。", definition: "負責幫隊友回血的職業。團隊沒有補師就無法打副本。", example: "「補師注意坦克的血量，他快倒了，快丟大補。」" },
+            { id: 135, category: 1, term: "仇恨列表", bopomofo: "ㄔㄡˊ ㄏㄣˋ ㄌㄧㄝˋ ㄅㄧㄠˇ", pinyin: "chóu hèn liè biǎo", english: "Threat Table", etymology: "「列表」是清單。遊戲系統記錄每個玩家對怪物的仇恨值，從高到低排列。", definition: "顯示誰對怪物的仇恨最高。坦克要維持第一名。", example: "「你看仇恨列表，你現在第二名，再打兩下就搶贏坦克了。」" },
+            { id: 144, category: 1, term: "副本", bopomofo: "ㄈㄨˋ ㄅㄣˇ", pinyin: "fù běn", english: "Dungeon", etymology: "「副本」是「複本」的意思，指為每一隊獨立複製的地圖，不同隊伍可以同時打互不干擾。", definition: "專門給一小隊人進入的封閉地圖，裡面有強力怪物和寶物。", example: "「我們五個人組隊，去打這個副本，王會掉好裝備。」" },
+            { id: 145, category: 1, term: "首領", bopomofo: "ㄕㄡˇ ㄌㄧㄥˇ", pinyin: "shǒu lǐng", english: "Boss", etymology: "「Boss」英文原意是老闆。遊戲中關卡最後的強大敵人就叫Boss，中文玩家常稱「王」或「首領」。", definition: "副本中最強大的敵人，通常有好幾階段的特殊技能。", example: "「小怪清完了，準備打首領，注意躲首領的範圍技。」" },
+            { id: 146, category: 1, term: "狂暴", bopomofo: "ㄎㄨㄤˊ ㄅㄠˋ", pinyin: "kuáng bào", english: "Enrage", etymology: "「狂暴」指發狂。如果打首領太久沒殺死，首領會進入狂暴狀態，傷害暴增。", definition: "首領打到一定時間後會變超強，逼你一定要在時間內打完。", example: "「快點輸出，首領快要狂暴了，狂暴後一下秒殺一個。」" },
+            { id: 150, category: 1, term: "易傷", bopomofo: "ㄧˋ ㄕㄤ", pinyin: "yì shāng", english: "Vulnerability", etymology: "「易傷」就是容易受傷。首領在某些階段會降低防禦或承受額外傷害。", definition: "首領受到額外傷害的階段，這時候全隊要集中火力。", example: "「首領蹲下去了，易傷階段來了，所有人開大招打！」" },
+            { id: 160, category: 1, term: "減益", bopomofo: "ㄐㄧㄢˇ ㄧˋ", pinyin: "jiǎn yì", english: "Debuff", etymology: "與增益相反，指加在敵人身上的負面效果，例如降低防禦、持續扣血。", definition: "讓敵人暫時變弱或持續受傷的狀態。", example: "「術士給首領上詛咒減益，牠的攻擊力會降低。」" },
+
+            // 第二類：遊戲選手與玩家實戰用語
+            { id: 1, category: 2, term: "補刀", bopomofo: "ㄅㄨˇ ㄉㄠ", pinyin: "bǔ dāo", english: "Last Hit", etymology: "源自《魔獸爭霸Ⅲ》自訂地圖《DotA》翻譯「補上最後一刀」，後由《英雄聯盟》社群繼承。「補」指追加攻擊，「刀」代指攻擊動作。", definition: "對小兵作出使其陣亡的最後一次攻擊，從而獨享該小兵死亡時給予的金幣與經驗。", example: "「10分鐘補刀100個，這是職業選手的基本功。」" },
+            { id: 7, category: 2, term: "大招", bopomofo: "ㄉㄚˋ ㄓㄠ", pinyin: "dà zhāo", english: "Ultimate", etymology: "源自格鬥遊戲「必殺技」，在MOBA社群中常簡稱為「大」或「大絕」。", definition: "英雄技能樹中最核心、威力最強的第四號技能（預設鍵位R），通常6級解鎖，冷卻時間長，具有改變團戰走向的戰略價值。", example: "「對面的角色沒大絕！集火秒他！」" },
+            { id: 8, category: 2, term: "發育", bopomofo: "ㄈㄚ ㄩˋ", pinyin: "fā yù", english: "Farm", etymology: "借用生物學「生長成熟」，對應英文「Farm」，指穩定獲取資源。", definition: "英雄通過補兵、刷野、拆塔、獲取擊殺或助攻，持續累積經驗與金幣，從而增強自身戰鬥力的過程。", example: "「慢慢發育等機會，我們後期能打。」" },
+            { id: 9, category: 2, term: "反野", bopomofo: "ㄈㄢˇ ㄧㄝˇ", pinyin: "fǎn yě", english: "Counter-Jungling", etymology: "由「反向」與「打野」組合而成。", definition: "打野玩家侵入敵方野區擊殺其野怪，以剝奪其經濟經驗、打亂其刷野節奏的壓制行為。", example: "「對面守護不了野區，看我去反野。」" },
+            { id: 11, category: 2, term: "翻盤", bopomofo: "ㄈㄢ ㄆㄢˊ", pinyin: "fān pán", english: "Comeback", etymology: "傳統棋牌術語，原指扭轉敗局，後用於體育和電競。", definition: "處於絕對劣勢（經濟、塔數、人頭落後）的一方，通過頑強防守、抓住敵方失誤或贏下關鍵團戰，逆轉戰局並最終獲勝。", example: "「只要比賽還沒結束，就還有翻盤的機會！」" },
+            { id: 13, category: 2, term: "控線", bopomofo: "ㄎㄨㄥˋ ㄒㄧㄢˋ", pinyin: "kòng xiàn", english: "Freeze", etymology: "英文「Freeze」（冰凍）形象表達將兵線「凍結」在某位置的戰術意圖。", definition: "玩家通過僅對小兵進行最後一擊（尾刀）或利用肉身拉扯小兵仇恨，使敵方小兵數量略多於己方，將兵線交戰點卡在靠近己方防禦塔前的特定區域。", example: "「兄弟們，我在上路控線，打野可以不用來幫我。」" },
+            { id: 15, category: 2, term: "逆風", bopomofo: "ㄋㄧˋ ㄈㄥ", pinyin: "nì fēng", english: "Disadvantage", etymology: "航海術語，比喻行進阻力大，引申為局勢不順。", definition: "己方在經濟總量、裝備質量、防禦塔數量、視野控制上全面落後，處於被動挨打的局面。", example: "「逆風就別出純輸出了，先補點防裝抗壓吧。」" },
+            { id: 16, category: 2, term: "團戰", bopomofo: "ㄊㄨㄢˊ ㄓㄢˋ", pinyin: "tuán zhàn", english: "Team Fight", etymology: "「團隊戰鬥」的縮寫。", definition: "雙方多名英雄，通常3人及以上，直至5v5，聚集爆發的高強度、決定性戰鬥。", example: "「這波團戰完全決定了勝負，這場我們要贏了。」" },
+            { id: 17, category: 2, term: "推線", bopomofo: "ㄊㄨㄟ ㄒㄧㄢˋ", pinyin: "tuī xiàn", english: "Push", etymology: "動賓結構，與「控線」互為對立戰術。", definition: "玩家通過範圍技能或高頻普攻快速清理敵方小兵，使己方小兵數量壓倒敵方，將交戰線推向敵方塔下。", example: "「趕緊幫我推線，我要回城買裝備了。」" },
+            { id: 20, category: 2, term: "走位", bopomofo: "ㄗㄡˇ ㄨㄟˋ", pinyin: "zǒu wèi", english: "Dodging", etymology: "傳統戲劇/體育術語移用，原指舞台上的移動路線。", definition: "通過高頻、無規律地點擊滑鼠，控制英雄不斷位移，以躲避敵方非指向性技能，並調整自身安全輸出位置。", example: "「哇！這個走位！連躲三個技能，太不可思議了！」" },
+            { id: 25, category: 2, term: "偷發育", bopomofo: "ㄊㄡ ㄈㄚ ㄩˋ", pinyin: "tōu fā yù", english: "Sneaky Farming", etymology: "民間口語造詞，帶有畫面感。", definition: "逆風劣勢方利用敵方抱團推進的視野盲區，派單帶英雄潛入邊線或敵方野區暗中清理資源，以求縮小經濟差距的冒險行為。", example: "「你們在正面拖住他們，我去邊路偷一波發育。」" },
+            { id: 27, category: 2, term: "一級團", bopomofo: "ㄧ ㄐㄧˊ ㄊㄨㄢˊ", pinyin: "yī jí tuán", english: "Level 1 Fight", etymology: "由「1級」與「團戰」拼合而成。", definition: "比賽開始、全員1級且小兵未出生前，一方抱團侵入敵方野區，試圖奪取首殺或干擾敵方打野開局路線的群體行動。", example: "「兄弟們出門搞快點，對面有一級入侵，小心被蹲！」" },
+            { id: 28, category: 2, term: "抓人", bopomofo: "ㄓㄨㄚ ㄖㄣˊ", pinyin: "zhuā rén", english: "Gank", etymology: "「Gang Killing」（幫派圍剿）的簡寫，為電競俚語。", definition: "打野、中路或輔助暫時離開分路，利用視野盲區突襲其他路線，形成人數優勢以擊殺敵方英雄。", example: "「對面打野一直來抓人，我上路沒法玩了。」" },
+            { id: 29, category: 2, term: "拉扯", bopomofo: "ㄌㄚ ㄔㄜˇ", pinyin: "lā chě", english: "Kiting", etymology: "傳統修辭「拉扯」與「放風箏」的比喻，英文「Kiting」原意「放風箏」。", definition: "英雄利用射程優勢、移速加成或減速技能，在保持不被敵方近戰貼身的前提下，一邊退卻一邊持續輸出；亦泛化為團隊陣型上的忽進忽退、誘敵深入的拉鋸戰。", example: "「這射手拉扯太強了，把近戰活活風箏死。」" },
+            { id: 30, category: 2, term: "開團", bopomofo: "ㄎㄞ ㄊㄨㄢˊ", pinyin: "kāi tuán", english: "Engage", etymology: "「開啟團戰」的縮寫。", definition: "在雙方對峙期，擁有強突進或控場的英雄主動發起先手，強行留住敵方並觸發5v5團戰的首發行為。", example: "「等我的信號，我閃現開團，你們跟上！」" },
+            { id: 31, category: 2, term: "越塔", bopomofo: "ㄩㄝˋ ㄊㄚˇ", pinyin: "yuè tǎ", english: "Turret Dive", etymology: "「越過防禦塔」的簡稱。", definition: "己方在兵線進塔或人數佔優時，衝入敵方防禦塔仇恨範圍內，頂著塔傷擊殺塔下殘血英雄的高風險進攻行為。", example: "「沒兵線別越塔，塔打人超痛，三下你就沒了。」" },
+            { id: 32, category: 2, term: "控場", bopomofo: "ㄎㄨㄥˋ ㄔㄤˇ", pinyin: "kòng chǎng", english: "Zone Control", etymology: "源自早期MMORPG與舞台術語，指控制場面的能力。", definition: "使用限制性技能或大範圍壓制力，來掌控戰局節奏與敵方行動空間的行為。", example: "「這隻角色的控場能力太強了，對面完全動不了。」" },
+            { id: 102, category: 2, term: "取消", bopomofo: "ㄑㄩˇ ㄒㄧㄠ", pinyin: "qǔ xiāo", english: "Cancel", etymology: "「取消」就是中斷目前動作。格鬥遊戲中，你可以用一個新招式打斷前一個招式的收尾動作。", definition: "用一個新招式強行中斷前一個招式的收尾動作，讓你接招更快。", example: "「輕拳後馬上取消接必殺技，對手就來不及防。」" },
+            { id: 113, category: 2, term: "確反", bopomofo: "ㄑㄩㄝˋ ㄈㄢˇ", pinyin: "què fǎn", english: "Punish", etymology: "「確」就是肯定、一定，「反」就是反擊。某些招式破綻很大，你只要防住，就一定能反打成功。", definition: "對方出完一個破綻很大的招式後，你一定能打到他，而且他無法防禦。", example: "「他這招被防住後有-15幀的硬直，你可以用輕拳確反。」" },
+            { id: 114, category: 2, term: "目押", bopomofo: "ㄇㄨˋ ㄧㄚ", pinyin: "mù yā", english: "Hit Confirm / Link", etymology: "日文「目押し」，指用眼睛看節奏來按鍵。不是亂按，而是抓準前一招打中的瞬間接下一招。", definition: "用眼睛看準時機，在特定時間點按下按鍵才能連上的連段技巧。", example: "「這套目押連段要練節奏，不能狂按，要看到打中的那一幀再按下一拳。」" },
+            { id: 115, category: 2, term: "擇", bopomofo: "ㄗㄜˊ", pinyin: "zé", english: "Mix-up", etymology: "「擇」就是選擇。你讓敵人在兩種攻擊之間猜一個，猜錯就要挨打。", definition: "同時給敵人兩個不同方向的威脅（例如打下段或抓投），讓他只能猜一個。", example: "「把他逼到角落後用上下擇，他要嘛防下段被投，要嘛拆投被掃腿。」" },
+            { id: 117, category: 2, term: "拆投", bopomofo: "ㄔㄞ ㄊㄡˊ", pinyin: "chāi tóu", english: "Throw Tech / Break", etymology: "「拆」就是解開，「投」就是抓技。在對手抓你的瞬間，你也按抓技，就能掙脫。", definition: "在被對手抓到的瞬間，自己也按下抓技鍵，就能掙脫，不會被摔。", example: "「他看到你要抓他，就按拆投，你沒摔到他反而被打。」" },
+            { id: 118, category: 2, term: "受身", bopomofo: "ㄕㄡˋ ㄕㄣ", pinyin: "shòu shēn", english: "Ukemi / Tech", etymology: "日文「受身」，指倒地時翻滾化解衝擊。被打倒後，在落地前按鍵可以快速起身。", definition: "被打倒在地時，在碰地前按鍵可以快速滾起來，避免被壓制。", example: "「快按受身，不然他會在旁邊等你起來繼續打你。」" },
+            { id: 119, category: 2, term: "打背", bopomofo: "ㄉㄚˇ ㄅㄟˋ", pinyin: "dǎ bèi", english: "Cross-up", etymology: "「打背」字面意思是「從背後攻擊」。格鬥遊戲中，跳過對手頭頂打背後，讓對手的防禦方向錯亂。", definition: "跳到敵人頭頂上方攻擊，讓他的防禦方向錯亂，因為你打的是他的背後。", example: "「你一直站著防禦沒用，他跳過來打背，你要反向防。」" },
+            { id: 120, category: 2, term: "差合", bopomofo: "ㄔㄚ ㄏㄜˊ", pinyin: "chā hé", english: "Whiff Punish", etymology: "日文「差し合い」，原意互相刺入。利用對手出招時手腳伸長的瞬間，用更長的招式打中他的手或腳。", definition: "對手出招時手腳伸出來，你用更遠的招式打他的手或腳，讓他打空卻被你打中。", example: "「他用重腳踢過來，腳伸很長，你用更遠的輕腳差合，就能踢到他的腳。」" },
+            { id: 121, category: 2, term: "壓起身", bopomofo: "ㄧㄚ ㄑㄧˇ ㄕㄣ", pinyin: "yā qǐ shēn", english: "Okizeme", etymology: "「壓」是壓制，「起身」是從倒地狀態站起來。對手倒地後你在他旁邊等待，他一起來就立刻攻擊。", definition: "對手倒地後，你站在他旁邊，等他站起來的那一瞬間出手打他，讓他來不及防。", example: "「他倒地了，快去壓起身，他一起來就出下段攻擊。」" },
+            { id: 122, category: 2, term: "安全跳", bopomofo: "ㄢ ㄑㄩㄢˊ ㄊㄧㄠˋ", pinyin: "ān quán tiào", english: "Safe Jump", etymology: "「安全」指不會被反擊，「跳」是跳躍。某些跳躍攻擊時機正確的話，即使被防住也不會被反擊。", definition: "一種跳躍攻擊，時機抓得好的話，就算被防住也不會被反擊。", example: "「這個安全跳練熟以後，對手不敢亂升龍，因為升龍會揮空然後被你打。」" },
+            { id: 124, category: 2, term: "波升戰術", bopomofo: "ㄅㄛ ㄕㄥ ㄓㄢˋ ㄕㄨˋ", pinyin: "bō shēng zhàn shù", english: "Zoning", etymology: "「波」是氣功波，「升」是升龍。遠處放波動拳逼對手跳，一跳就用升龍拳打下來。", definition: "一種打法：遠處一直放氣功，逼對方跳過來，再用對空技把他打下來。", example: "「他用波升戰術，你不要傻傻跳，用走路慢慢靠近，或滾過氣功。」" },
+            { id: 125, category: 2, term: "立回", bopomofo: "ㄌㄧˋ ㄏㄨㄟˊ", pinyin: "lì huí", english: "Neutral Game", etymology: "日文「立ち回り」，原意是走動、行動。指雙方還沒正式交手前，靠走位和輕攻擊試探的階段。", definition: "雙方還沒正式交手前，互相走位、出輕拳試探、騙招的階段。立回強的人容易取得先手。", example: "「立回階段不要亂發大絕，先用輕拳輕腳摸一下，看對手反應。」" },
+            { id: 129, category: 2, term: "完美勝利", bopomofo: "ㄨㄢˊ ㄇㄟˇ ㄕㄥˋ ㄌㄧˋ", pinyin: "wán měi shèng lì", english: "Perfect", etymology: "「Perfect」是英文完美。最早在《快打旋風II》中，一回合滿血打敗對手會出現「PERFECT」字樣。", definition: "一回合內完全沒有被對手打到一滴血，滿血獲勝。", example: "「他這一局打得真好，完全沒被碰到，是完美勝利！」" },
+            { id: 133, category: 2, term: "仇恨失控", bopomofo: "ㄔㄡˊ ㄏㄣˋ ㄕ ㄎㄨㄥˋ", pinyin: "chóu hèn shī kòng", english: "Over Threat (OT)", etymology: "仇恨失控是「Over Threat」翻譯而來。當輸出或補師的仇恨超過坦克，導致王轉頭打他們，就叫OT。", definition: "你的仇恨超過了坦克，王轉頭來打你，通常會導致滅團。", example: "「你別再輸出了，再打就要OT了，等坦克拉穩。」" },
+            { id: 136, category: 2, term: "拉怪", bopomofo: "ㄌㄚ ㄍㄨㄞˋ", pinyin: "lā guài", english: "Pull", etymology: "「拉」是吸引帶動。坦克用遠程技能吸引怪物過來，避免隊友被圍攻。", definition: "坦克用技能吸引怪物，把它帶到適合戰鬥的位置。", example: "「坦克去拉怪，其他人退後，不要亂動。」" },
+            { id: 137, category: 2, term: "群拉", bopomofo: "ㄑㄩㄣˊ ㄌㄚ", pinyin: "qún lā", english: "AoE Pull", etymology: "「群」是多隻怪物。坦克用範圍技能同時吸引多隻怪物的仇恨。", definition: "一次拉住好幾隻怪物，不讓它們去打隊友。", example: "「這波有三隻小怪，你要用群拉技能全部拉住。」" },
+            { id: 139, category: 2, term: "驅散", bopomofo: "ㄑㄩ ㄙㄢˋ", pinyin: "qū sàn", english: "Dispel", etymology: "「驅散」本意是趕走。指補師可以用技能消除隊友身上的中毒、詛咒等負面效果。", definition: "移除隊友或敵人身上的增益或減益效果。", example: "「他被沉默了不能補血，快幫他驅散！」" },
+            { id: 140, category: 2, term: "群驅", bopomofo: "ㄑㄩㄣˊ ㄑㄩ", pinyin: "qún qū", english: "Mass Dispel", etymology: "「群」是多人，「驅」是驅散。一次驅散整個團隊所有人的負面效果。", definition: "一次消除全隊所有人身上的負面狀態。", example: "「首領放了全團中毒，補師快用群驅！」" },
+            { id: 141, category: 2, term: "戰復", bopomofo: "ㄓㄢˋ ㄈㄨˋ", pinyin: "zhàn fù", english: "Battle Rez", etymology: "「戰」是戰鬥中，「復」是復活。某些職業可以在戰鬥中把人拉起來復活。", definition: "在戰鬥中直接復活死亡的隊友，不用等脫離戰鬥。", example: "「坦克倒了，德魯伊快用戰復拉他起來！」" },
+            { id: 142, category: 2, term: "滅團", bopomofo: "ㄇㄧㄝˋ ㄊㄨㄢˊ", pinyin: "miè tuán", english: "Wipe", etymology: "「滅」是消滅，「團」是團隊。全隊都被打死，任務失敗。", definition: "全隊所有成員都死亡，副本挑戰失敗。", example: "「大家踩到地板技了，滅團，重新跑吧。」" },
+            { id: 147, category: 2, term: "地板技", bopomofo: "ㄉㄧˋ ㄅㄢˇ ㄐㄧˋ", pinyin: "dì bǎn jì", english: "AoE Ground", etymology: "「地板」指地面，「技」是技能。首領的某些招式會在地面畫出危險範圍。", definition: "首領放在地上的範圍傷害，站在裡面會一直掉血，必須躲開。", example: "「看到地上紅圈就要跑，那是地板技，站裡面三秒就死。」" },
+            { id: 148, category: 2, term: "團隊冷卻", bopomofo: "ㄊㄨㄢˊ ㄉㄨㄟˋ ㄌㄥˇ ㄑㄩㄝˋ", pinyin: "tuán duì lěng què", english: "Raid Cooldown", etymology: "「團隊冷卻」指全隊共享的強力技能，冷卻時間很長，例如全團減傷。", definition: "全隊一起使用的長冷卻強力技能，用來扛首領的爆發或拚一波傷害。", example: "「首領要放全螢幕大招了，開團隊減傷，所有人集中！」" },
+            { id: 149, category: 2, term: "爆發", bopomofo: "ㄅㄠˋ ㄈㄚ", pinyin: "bào fā", english: "Burst", etymology: "「爆發」指短時間內輸出大量傷害。許多職業有爆發技能，開啟後攻擊力暴增幾秒。", definition: "短時間內大幅提高傷害的技能，通常冷卻很長，要挑時機用。", example: "「等首領易傷階段再開爆發，平常不要亂放。」" },
+            { id: 151, category: 2, term: "轉火", bopomofo: "ㄓㄨㄢˇ ㄏㄨㄛˇ", pinyin: "zhuǎn huǒ", english: "Switch Target", etymology: "「轉」是轉換，「火」是火力。從打首領改為打旁邊冒出的小怪。", definition: "停止攻擊目前目標，改打新出現的敵人。", example: "「小怪出來了，全部轉火打小怪，不要貪打首領。」" },
+            { id: 153, category: 2, term: "開怪", bopomofo: "ㄎㄞ ㄍㄨㄞˋ", pinyin: "kāi guài", english: "Engage", etymology: "「開」是開始，「怪」是戰鬥。坦克用第一下攻擊啟動與首領的戰鬥。", definition: "由坦克發動第一次攻擊，開始和首領戰鬥。", example: "「等我倒數完，坦克開怪，其他人等三秒再輸出。」" },
+            { id: 154, category: 2, term: "標記", bopomofo: "ㄅㄧㄠ ㄐㄧˋ", pinyin: "biāo jì", english: "Mark", etymology: "「標記」是做記號。團隊隊長可以在怪物頭上放圖示，指示大家先打哪一隻。", definition: "在怪物頭上放圖案，告訴隊友攻擊順序。", example: "「我標記骷髏的先打，叉叉的第二隻，不要打錯。」" },
+            { id: 155, category: 2, term: "跑位", bopomofo: "ㄆㄠˇ ㄨㄟˋ", pinyin: "pǎo wèi", english: "Positioning", etymology: "「跑」是移動，「位」是位置。躲避首領的技能而移動到安全點。", definition: "根據首領的技能移動到安全位置。", example: "「首領噴火了，大家跑位到牠背後！」" },
+            { id: 156, category: 2, term: "站位", bopomofo: "ㄓㄢˋ ㄨㄟˋ", pinyin: "zhàn wèi", english: "Standing Position", etymology: "與跑位相對，站位指每個人應該固定的位置。例如坦克站正面、輸出站背面。", definition: "團隊成員各自固定的戰鬥位置，避免互相干擾。", example: "「輸出全部站首領背後，不要跟坦克站正面，會被順劈斬打死。」" },
+            { id: 157, category: 2, term: "斷法", bopomofo: "ㄉㄨㄢˋ ㄈㄚˇ", pinyin: "duàn fǎ", english: "Interrupt", etymology: "「斷」是中斷，「法」是施法。用打斷技能讓敵人的詠唱技能失效。", definition: "在敵人詠唱時用打斷技能，讓他的招式放不出來。", example: "「首領在讀條大絕，快斷法！誰有打斷？」" },
+
+            // 第三類：學生與年輕族群常用語
+            { id: 33, category: 3, term: "雷隊友", bopomofo: "ㄌㄟˊ ㄉㄨㄟˋ ㄧㄡˇ", pinyin: "léi duì yǒu", english: "Troll / Feeder", etymology: "台灣網路流行語，「雷」在此作形容詞或動詞，意指像踩到地雷一樣帶來災難。", definition: "指在遊戲中表現極差、失誤頻頻，甚至拖累整個團隊的玩家。", example: "「這場又排到雷隊友了，我真的帶不動啊！」" },
+            { id: 34, category: 3, term: "躺分", bopomofo: "ㄊㄤˇ ㄈㄣ", pinyin: "tǎng fēn", english: "Carry Me / Free", etymology: "由「躺著賺積分」簡化而來，指不需要努力就能獲勝。", definition: "在遊戲中自身沒有太多貢獻，依靠強大隊友的出色表現而輕鬆贏得比賽並獲得積分。", example: "「這把我只要負責活著，靠大腿帶我躺分就好。」" },
+            { id: 35, category: 3, term: "瘋狂輸出", bopomofo: "ㄈㄥ ㄎㄨㄤˊ ㄕㄨ ㄔㄨ", pinyin: "fēng kuáng", english: "Massive DPS", etymology: "由遊戲術語「輸出」結合誇飾形容詞而來。", definition: "在極短時間內對敵人造成大量傷害。現也常用於形容強烈地表達意見。", example: "「坦克在前面扛住了所有傷害，射手在後排瘋狂輸出！」" },
+            { id: 127, category: 3, term: "關廁所", bopomofo: "ㄍㄨㄢ ㄘㄜˋ ㄙㄨㄛˇ", pinyin: "guān cè suǒ", english: "Corner Trap", etymology: "台灣玩家用語，像把人關在廁所裡沒有後退空間。", definition: "把敵人逼到畫面或地圖的死角邊緣，使其無法後退逃脫，只能被動挨打。", example: "「你把他打到角落了，別讓他出來，用壓起身繼續關廁所。」" },
+            { id: 143, category: 3, term: "跑屍", bopomofo: "ㄆㄠˇ ㄕ", pinyin: "pǎo shī", english: "Corpse Run", etymology: "「跑」奔跑，「屍」屍體。MMORPG常見死亡懲罰機制。", definition: "團隊滅團後，所有人靈魂出竅，必須從墓地跑回死亡地點撿拾屍體復活。", example: "「滅團了，大家跑屍，小心路上還有怪。」" },
+            { id: 152, category: 3, term: "修裝", bopomofo: "ㄒㄧㄡ ㄓㄨㄤ", pinyin: "xiū zhuāng", english: "Repair", etymology: "「修」理「裝」備。", definition: "因戰鬥死亡導致裝備耐久度下降，需回城花費金幣修理恢復裝備效能。", example: "「滅團太多次，我的裝備紅了，先回城修裝再打。」" }
+        ];
+
+        const bopomofoOrder = ['ㄅ','ㄆ','ㄇ','ㄈ','ㄉ','ㄊ','ㄋ','ㄌ','ㄍ','ㄎ','ㄏ','ㄐ','ㄑ','ㄒ','ㄓ','ㄔ','ㄕ','ㄖ','ㄗ','ㄘ','ㄙ','ㄧ','ㄨ','ㄩ','ㄚ','ㄛ','ㄜ','ㄝ','ㄞ','ㄟ','ㄠ','ㄡ','ㄢ','ㄣ','ㄤ','ㄥ','ㄦ'];
+        const strokeCollator = new Intl.Collator('zh-TW', { collation: 'stroke' });
+        
+        function getInitial(bopoStr) { return bopoStr ? bopoStr.charAt(0) : ''; }
+
+        dictionaryData.sort((a, b) => {
+            const initialA = getInitial(a.bopomofo);
+            const initialB = getInitial(b.bopomofo);
+            const indexA = bopomofoOrder.indexOf(initialA);
+            const indexB = bopomofoOrder.indexOf(initialB);
+
+            if (indexA !== indexB) {
+                if (indexA === -1) return 1;
+                if (indexB === -1) return -1;
+                return indexA - indexB;
+            }
+            return strokeCollator.compare(a.term, b.term);
+        });
+
+        let pagesHtml = [];
+        let tocData = []; 
+        let bopoPageMap = {}; 
+
+        // [Page 0: 封面 - 右頁]
+        pagesHtml.push(`
+            <div class="page-content cover-page justify-center items-center text-center relative">
+                <div class="absolute top-8 left-8 text-fuchsia-500/30 font-mono text-9xl font-black">01</div>
+                <div class="z-10 w-full">
+                    <p class="text-cyan-400 font-black tracking-[0.3em] text-sm mb-4">ESPORTS GLOSSARY</p>
+                    <h1 class="text-6xl font-black text-transparent bg-clip-text bg-gradient-to-br from-fuchsia-400 to-cyan-300 italic mb-8 leading-tight drop-shadow-[0_0_15px_rgba(217,70,239,0.5)]">
+                        遊戲用語<br>電子辭典
+                    </h1>
+                    <div class="w-24 h-1 bg-gradient-to-r from-transparent via-slate-500 to-transparent mx-auto mb-8"></div>
+                    <p class="text-slate-400 font-medium tracking-widest text-sm mb-2">【 編輯與企劃團隊 】</p>
+                    <p class="text-fuchsia-400 font-bold text-lg">林育民 <span class="text-slate-500 text-sm font-mono ml-1">413017087</span></p>
+                    <p class="text-cyan-400 font-bold text-lg">黃東林 <span class="text-slate-500 text-sm font-mono ml-1">412016023</span></p>
+                </div>
+            </div>
+        `);
+
+        // [Page 1: 版權頁 - 左頁]
+        pagesHtml.push(`
+            <div class="page-content justify-center relative">
+                <div class="absolute bottom-10 left-0 w-full text-center opacity-30">
+                    <p class="font-mono text-xs">Generated by Team System<br>All Rights Reserved.</p>
+                </div>
+            </div>
+        `);
+
+        // [Page 2: 目錄 - 右頁]
+        const tocPageIndex = pagesHtml.length;
+        pagesHtml.push(""); // 預留給目錄
+
+        // [Page 3: 凡例與目的 - 左頁]
+        tocData.push({ title: "編輯凡例與目的", page: pagesHtml.length });
+        pagesHtml.push(`
+            <div class="page-content overflow-y-auto hide-scroll">
+                <h2 class="text-2xl font-black text-fuchsia-400 mb-4 border-b border-fuchsia-900/50 pb-2">凡例與辭典類型</h2>
+                <div class="space-y-4 text-sm text-slate-300 leading-relaxed mb-6">
+                    <p>本辭典收錄時間涵蓋 <strong class="text-white">2006年到2026年</strong>，採用第一版注音符號作為檢索排序依據；同一注音項目之下，依<strong class="text-cyan-300">筆畫數</strong>進行次序排列，確保查詢便利性與一致性。</p>
+                    <p>以科普遊戲相關用語為編纂宗旨，收錄 MOBA、MMORPG、FTG 三種遊戲類型各類別常用之核心詞彙，共計 90 則條目（排除單機遊戲此類無需溝通之類型）。</p>
+                    <div class="bg-fuchsia-950/20 p-3 rounded border border-fuchsia-900/50">
+                        <span class="text-fuchsia-300 font-bold">【描述型辭典】</span> 重點不在規定唯一正確用法，而是依照遊戲選手、玩家社群與年輕族群的實際使用情況，真實記錄並描述詞語的意思、使用情境與延伸變化。
+                    </div>
+                </div>
+
+                <h2 class="text-2xl font-black text-cyan-400 mb-4 border-b border-cyan-900/50 pb-2">目的與對象</h2>
+                <div class="space-y-4 text-sm text-slate-300 leading-relaxed">
+                    <p>主要針對要加入這三大遊戲領域的初學者。在各個遊戲社群長期的發展與演進中，玩家逐漸衍生出獨特的專屬用語。對於新手而言，這些用語往往會成為溝通障礙。</p>
+                    <p>本辭典旨在幫助新進玩家快速熟悉高頻用語，消除溝通隔閡，進而享受暢快遊玩的樂趣。</p>
+                    <p>同時整合了日常生活中可能會接觸到的基本詞彙（如：<strong class="text-white">雷隊友、躺分、瘋狂輸出</strong>），這些詞彙不僅是專業術語，更常見於日常交流、直播留言與校園對話中。</p>
+                </div>
+            </div>
+        `);
+
+        // [Page 4: 遊戲類型介紹 - 右頁]
+        tocData.push({ title: "三大遊戲類型", page: pagesHtml.length });
+        pagesHtml.push(`
+            <div class="page-content">
+                <h2 class="text-2xl font-black text-white mb-6 border-b border-slate-700 pb-2">三大遊戲類型</h2>
+                <div class="space-y-6">
+                    <div class="bg-gradient-to-r from-blue-900/40 to-transparent p-5 rounded-lg border-l-4 border-blue-500">
+                        <h3 class="text-blue-400 font-black text-xl mb-2 flex items-center gap-2">MOBA</h3>
+                        <p class="text-slate-300 text-sm leading-relaxed">多人線上戰鬥競技遊戲。通常由兩隊玩家進行對戰，每位玩家操控一名角色，在固定地圖中透過推塔、擊殺敵方角色、取得資源等方式爭取勝利。</p>
+                    </div>
+                    <div class="bg-gradient-to-r from-green-900/40 to-transparent p-5 rounded-lg border-l-4 border-green-500">
+                        <h3 class="text-green-400 font-black text-xl mb-2 flex items-center gap-2">MMORPG</h3>
+                        <p class="text-slate-300 text-sm leading-relaxed">大型多人線上角色扮演遊戲。指大量玩家可以同時在線上同一個虛擬世界中互動、合作（如攻略副本）或相互競爭的遊戲類型。</p>
+                    </div>
+                    <div class="bg-gradient-to-r from-red-900/40 to-transparent p-5 rounded-lg border-l-4 border-red-500">
+                        <h3 class="text-red-400 font-black text-xl mb-2 flex items-center gap-2">FTG</h3>
+                        <p class="text-slate-300 text-sm leading-relaxed">格鬥遊戲。玩家操縱螢幕上自己的角色和對手進行近身格鬥對戰，高度考驗反應速度、連段操作與心理博弈（如差合、立回等戰術）。</p>
+                    </div>
+                </div>
+            </div>
+        `);
+
+        // [Page 5: 編排體例與操作 - 左頁]
+        tocData.push({ title: "編排體例與系統操作", page: pagesHtml.length });
+        pagesHtml.push(`
+            <div class="page-content">
+                <h2 class="text-2xl font-black text-white mb-6 border-b border-slate-700 pb-2">編排體例與系統操作</h2>
+                
+                <h3 class="text-fuchsia-400 font-bold mb-3">分類與編排</h3>
+                <p class="text-slate-300 text-sm mb-4 leading-relaxed">全書以<strong class="text-white">「注音順序」</strong>為主要排列方式。詞彙內容結構涵蓋三大主軸：</p>
+                <ul class="space-y-3 text-sm text-slate-400 mb-8">
+                    <li class="flex items-start gap-2"><span class="text-cyan-500 mt-1">▶</span> <span><strong class="text-slate-200">第一類：遊戲專業術語</strong><br>收錄遊戲類型、角色定位、技能效果與機制等基礎詞彙。</span></li>
+                    <li class="flex items-start gap-2"><span class="text-cyan-500 mt-1">▶</span> <span><strong class="text-slate-200">第二類：實戰與戰術用語</strong><br>包括比賽、訓練、團隊溝通與戰術分析用語（如開團、控場）。</span></li>
+                    <li class="flex items-start gap-2"><span class="text-cyan-500 mt-1">▶</span> <span><strong class="text-slate-200">第三類：社群流行語</strong><br>學生與年輕玩家在遊戲社群及日常生活常使用的延伸詞彙。</span></li>
+                </ul>
+
+                <h3 class="text-fuchsia-400 font-bold mb-3">系統翻閱指南</h3>
+                <div class="bg-slate-900/50 p-4 rounded-lg border border-slate-800 text-sm text-slate-300 space-y-2">
+                    <p>• 點擊畫面左/右側邊緣，或使用鍵盤 <kbd class="bg-slate-800 px-1 rounded">→</kbd> <kbd class="bg-slate-800 px-1 rounded">←</kbd> 進行翻頁。</p>
+                    <p>• 點擊畫面最右側的<strong class="text-white">「注音浮動檢索列」</strong>或透過<strong class="text-white">「注音符號快速檢索表」</strong>，系統將直接跳轉至該注音字首的第一個詞彙頁面。</p>
+                </div>
+            </div>
+        `);
+
+        // [Page 6: 滿版注音檢索 - 右頁]
+        tocData.push({ title: "注音符號快速檢索", page: pagesHtml.length });
+        const zhuyinIndexPageIndex = pagesHtml.length;
+        pagesHtml.push(""); 
+
+        // [Page 7: 傳統明細索引 - 左頁]
+        tocData.push({ title: "注音明細索引", page: pagesHtml.length });
+        const tradIndexPageIndex = pagesHtml.length;
+        pagesHtml.push(""); 
+
+        // [Page 8: 辭典正文區隔 - 右頁]
+        pagesHtml.push(`
+            <div class="page-content justify-center items-center text-center">
+                <div class="text-slate-700/20 text-[12rem] leading-none font-black italic mb-2 select-none">A-Z</div>
+                <h2 class="text-3xl font-bold text-slate-300 tracking-[0.5em] mb-3 ml-4">辭典正文</h2>
+                <p class="text-slate-500 font-mono text-sm uppercase tracking-widest">Main Dictionary Entries</p>
+            </div>
+        `);
+
+        tocData.push({ title: "辭典正文", page: pagesHtml.length });
+        
+        const termStartPage = pagesHtml.length;
+
+        // 依序推入詞彙頁面 (Page 9...)
+        dictionaryData.forEach((item, index) => {
+            item.targetPage = termStartPage + index;
+            item.targetSheet = Math.floor(item.targetPage / 2);
+
+            const initial = getInitial(item.bopomofo);
+            if (initial && bopomofoOrder.includes(initial) && bopoPageMap[initial] === undefined) {
+                bopoPageMap[initial] = item.targetSheet;
+            }
+
+            let itemHtml = `
+                <div class="page-content flex flex-col h-full group">
+                    <div class="flex-grow">
+                        <div class="flex flex-wrap items-center gap-3 mb-6">
+                            <span class="bg-fuchsia-950/40 text-fuchsia-300 text-sm px-3 py-1 rounded font-bold border border-fuchsia-800/50 tracking-widest">${item.bopomofo}</span>
+                            <span class="bg-slate-800 text-slate-300 text-sm px-3 py-1 rounded font-bold border border-slate-700 tracking-widest">${item.pinyin}</span>
+                        </div>
+                        
+                        <div class="mb-8 relative">
+                            <h2 class="text-5xl font-black text-white italic tracking-wide mb-3 relative z-10 group-hover:text-cyan-300 transition-colors">${item.term}</h2>
+                            <span class="text-cyan-400 font-mono text-lg font-black border border-cyan-900/50 bg-cyan-950/30 px-3 py-1 rounded shadow-[0_0_10px_rgba(6,182,212,0.1)] uppercase tracking-wider inline-block">${item.english}</span>
+                        </div>
+
+                        <div class="space-y-6">
+                            <div class="bg-black/40 p-5 rounded-xl border border-slate-800/80 shadow-inner">
+                                <h3 class="text-sm text-fuchsia-400 uppercase tracking-widest font-black mb-3 flex items-center gap-2 border-b border-slate-800 pb-2">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                                    詳細釋義
+                                </h3>
+                                <p class="text-slate-100 text-base leading-relaxed font-medium">${item.definition}</p>
+                            </div>
+
+                            <div>
+                                <h3 class="text-xs text-slate-500 uppercase tracking-widest font-bold mb-2 px-1">實戰情境範例</h3>
+                                <blockquote class="border-l-[4px] border-cyan-500 bg-gradient-to-r from-cyan-900/20 to-transparent pl-4 py-3 rounded-r-lg italic text-slate-200 text-sm font-medium leading-relaxed">
+                                    ${item.example}
+                                </blockquote>
+                            </div>
+
+                            <div>
+                                <h3 class="text-xs text-slate-500 uppercase tracking-widest font-bold mb-2 px-1">歷史與詞源</h3>
+                                <p class="text-slate-400 text-sm leading-relaxed">${item.etymology}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            pagesHtml.push(itemHtml);
+        });
+
+        // 確保總頁數是偶數
+        if (pagesHtml.length % 2 !== 0) {
+            pagesHtml.push(`<div class="page-content items-center justify-center text-slate-800 font-mono">INTENTIONALLY LEFT BLANK</div>`);
+        }
+
+        // [封底]
+        pagesHtml.push(`
+            <div class="page-content justify-center items-center cover-page text-center">
+                <div class="w-16 h-16 rounded-full border-2 border-slate-800 flex items-center justify-center text-slate-600 mb-4">
+                    <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 13l4 4L19 7"></path></svg>
+                </div>
+                <h2 class="text-xl font-bold tracking-widest text-slate-400 mb-2">感謝您的閱讀</h2>
+                <p class="text-slate-600 text-sm">線上遊戲用語電子辭典</p>
+            </div>
+        `);
+
+        // === 組裝目錄 (TOC) ===
+        let tocHtml = `
+            <div class="page-content">
+                <h2 class="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500 mb-8 border-b border-slate-700 pb-2">
+                    系統目錄 INDEX
+                </h2>
+                <ul class="space-y-6 flex-grow">
+        `;
+        tocData.forEach((item, index) => {
+            const leafTarget = Math.floor(item.page / 2);
+            tocHtml += `
+                <li class="cursor-pointer group flex items-baseline" onclick="event.stopPropagation(); flipToLeaf(${leafTarget})">
+                    <span class="text-fuchsia-500 font-bold mr-4 text-lg">0${index+1}</span>
+                    <span class="text-slate-200 text-lg group-hover:text-cyan-300 transition-colors border-b border-transparent group-hover:border-cyan-300 font-medium">${item.title}</span>
+                    <div class="flex-grow border-b border-dotted border-slate-600 mx-4 opacity-50 relative top-[-4px]"></div>
+                    <span class="text-slate-500 font-mono text-sm">P.${item.page}</span>
+                </li>
+            `;
+        });
+        tocHtml += `</ul></div>`;
+        pagesHtml[tocPageIndex] = tocHtml;
+
+        // === 組裝注音滿版檢索頁 ===
+        let zhuyinHtml = `
+            <div class="page-content">
+                <h2 class="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-fuchsia-400 to-cyan-400 mb-6 border-b border-slate-700 pb-2">
+                    注音符號快速檢索
+                </h2>
+                <div class="grid grid-cols-5 gap-3 flex-grow content-start">
+        `;
+        bopomofoOrder.forEach(char => {
+            if (bopoPageMap[char] !== undefined) {
+                const targetLeaf = bopoPageMap[char];
+                zhuyinHtml += `
+                    <button onclick="event.stopPropagation(); flipToLeaf(${targetLeaf})" class="h-12 flex items-center justify-center text-lg font-bold text-cyan-300 border border-cyan-900/50 bg-cyan-950/30 rounded-lg hover:bg-fuchsia-600 hover:border-fuchsia-400 hover:text-white transition-all shadow-[0_0_10px_rgba(6,182,212,0.1)] hover:shadow-[0_0_15px_rgba(217,70,239,0.5)] hover:-translate-y-1">
+                        ${char}
+                    </button>
+                `;
+            } else {
+                zhuyinHtml += `
+                    <div class="h-12 flex items-center justify-center text-lg font-bold text-slate-700 border border-slate-800/30 bg-slate-900/20 rounded-lg opacity-50 cursor-not-allowed">
+                        ${char}
+                    </div>
+                `;
+            }
+        });
+        zhuyinHtml += `</div></div>`;
+        pagesHtml[zhuyinIndexPageIndex] = zhuyinHtml;
+
+        // === 組裝傳統注音明細索引頁 ===
+        let tradHTML = `
+            <div class="page-content overflow-y-auto hide-scroll">
+                <h2 class="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-red-500 to-fuchsia-500 mb-6 tracking-[0.3em] border-b-2 border-red-900/50 pb-3 flex items-center justify-center text-center">
+                    注 音 明 細 索 引
+                </h2>
+                <div class="columns-2 gap-6 text-sm">
+        `;
+        bopomofoOrder.forEach(char => {
+            const charItems = dictionaryData.filter(item => getInitial(item.bopomofo) === char);
+            if(charItems.length > 0) {
+                tradHTML += `
+                    <div class="break-inside-avoid mb-5 bg-slate-900/30 p-2.5 rounded border border-slate-800/80">
+                        <div class="bg-gradient-to-r from-red-900/40 to-transparent text-red-400 font-black text-center py-1 rounded-sm mb-3 border-l-4 border-red-500 shadow-md">
+                            【 ${char} 】
+                        </div>
+                        <ul class="text-[13px] space-y-2.5 px-1 font-medium">`;
+                
+                charItems.forEach(item => {
+                    tradHTML += `
+                        <li class="flex items-end cursor-pointer group toc-link" onclick="flipToLeaf(${item.targetSheet})">
+                            <span class="whitespace-nowrap text-slate-300 group-hover:text-cyan-400 transition-colors">${item.term}</span>
+                            <span class="flex-grow border-b-2 border-slate-700/50 mx-2 mb-1 border-dotted group-hover:border-cyan-500/50 transition-colors"></span>
+                            <span class="font-mono text-xs text-slate-500 group-hover:text-cyan-400 transition-colors">${item.targetPage}</span>
+                        </li>`;
+                });
+                
+                tradHTML += `</ul></div>`;
+            }
+        });
+        tradHTML += `</div></div>`;
+        pagesHtml[tradIndexPageIndex] = tradHTML;
+
+        // === 建立右側常駐檢索列 ===
+        const thumbIndexEl = document.getElementById('thumb-index');
+        bopomofoOrder.forEach(char => {
+            const btn = document.createElement('div');
+            btn.className = 'thumb-btn';
+            btn.textContent = char;
+            
+            if (bopoPageMap[char] !== undefined) {
+                btn.onclick = () => {
+                    document.querySelectorAll('.thumb-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    flipToLeaf(bopoPageMap[char]);
+                };
+            } else {
+                btn.classList.add('disabled');
+            }
+            thumbIndexEl.appendChild(btn);
+        });
+
+        // === 建立 3D 書頁 ===
+        const bookEl = document.getElementById('book');
+        let leaves = [];
+        
+        for (let i = 0; i < pagesHtml.length; i += 2) {
+            const leaf = document.createElement('div');
+            leaf.className = 'leaf';
+            leaf.dataset.index = i / 2;
+            
+            leaf.onclick = function() {
+                if (this.classList.contains('flipped')) {
+                    prevPage();
+                } else {
+                    nextPage();
+                }
+            };
+
+            const front = document.createElement('div');
+            front.className = 'page-front';
+            front.innerHTML = pagesHtml[i] + `<div class="page-number">${i === 0 ? '' : i}</div>`;
+
+            const back = document.createElement('div');
+            back.className = 'page-back';
+            const backContent = (i + 1 < pagesHtml.length) ? pagesHtml[i + 1] : '<div class="page-content"></div>';
+            back.innerHTML = backContent + `<div class="page-number">${(i + 1) === pagesHtml.length - 1 ? '' : (i + 1)}</div>`;
+
+            leaf.appendChild(front);
+            leaf.appendChild(back);
+            bookEl.appendChild(leaf);
+            leaves.push(leaf);
+        }
+
+        let currentLeaf = 0; 
+
+        function updateZIndex() {
+            leaves.forEach((leaf, idx) => {
+                if (idx < currentLeaf) {
+                    leaf.style.zIndex = idx;
+                } else {
+                    leaf.style.zIndex = leaves.length - idx;
+                }
+            });
+            updateActiveThumb(); 
+        }
+
+        function nextPage() {
+            if (currentLeaf < leaves.length) {
+                leaves[currentLeaf].classList.add('flipped');
+                currentLeaf++;
+                updateZIndex();
+            }
+        }
+
+        function prevPage() {
+            if (currentLeaf > 0) {
+                currentLeaf--;
+                leaves[currentLeaf].classList.remove('flipped');
+                updateZIndex();
+            }
+        }
+
+        function flipToLeaf(targetIndex) {
+            while(currentLeaf < targetIndex) {
+                leaves[currentLeaf].classList.add('flipped');
+                currentLeaf++;
+            }
+            while(currentLeaf > targetIndex) {
+                currentLeaf--;
+                leaves[currentLeaf].classList.remove('flipped');
+            }
+            updateZIndex();
+        }
+
+        function updateActiveThumb() {
+            let activeChar = null;
+            Object.keys(bopoPageMap).forEach(char => {
+                if (bopoPageMap[char] <= currentLeaf) {
+                    if (!activeChar || bopoPageMap[char] > bopoPageMap[activeChar]) {
+                        activeChar = char;
+                    }
+                }
+            });
+
+            document.querySelectorAll('.thumb-btn').forEach(b => {
+                if (b.textContent === activeChar) {
+                    b.classList.add('active');
+                } else {
+                    b.classList.remove('active');
+                }
+            });
+        }
+
+        updateZIndex();
+
+        function resizeBook() {
+            const wrapper = document.getElementById('book-wrapper');
+            const w = window.innerWidth;
+            const h = window.innerHeight;
+            
+            const scale = Math.min((w - 100) / 860, (h - 150) / 640);
+            if (scale < 1) {
+                wrapper.style.transform = `scale(${scale})`;
+            } else {
+                wrapper.style.transform = `scale(1)`;
+            }
+        }
+        window.addEventListener('resize', resizeBook);
+        resizeBook();
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowRight' || e.key === ' ') {
+                nextPage();
+            } else if (e.key === 'ArrowLeft') {
+                prevPage();
+            }
+        });
+
+    </script>
+</body>
+</html>
